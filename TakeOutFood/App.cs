@@ -25,22 +25,15 @@
             double total = 0.0;
             var itemDict = itemRepository.FindAll().ToDictionary(x=>x.Id, x=>x);
             var promoList = salesPromotionRepository.FindAll();
+            var totalRelatedItems = promoList.SelectMany(x => x.RelatedItems).ToList();
             foreach (var item in inputs)
             {
                 var parsedStrings = item.Split(" ");
                 inputDict.Add(parsedStrings[0], Convert.ToInt32(parsedStrings[2]));
-                if (promoList[0].RelatedItems.Contains(parsedStrings[0])) 
-                { 
-                    isUsingPromo = true;
-                    savingList.Add(parsedStrings[0]);
-                }
-            }
-
-            foreach (var pair in inputDict)
-            {
-                double subtotal = itemDict[pair.Key].Price * pair.Value;
+                double subtotal = itemDict[parsedStrings[0]].Price * Convert.ToInt32(parsedStrings[2]);
                 total += subtotal;
-                ret += $"{itemDict[pair.Key].Name} x {pair.Value} = {(int)subtotal} yuan\n";
+                ret += $"{itemDict[parsedStrings[0]].Name} x {parsedStrings[2]} = {(int)subtotal} yuan\n";
+                if (totalRelatedItems.Contains(parsedStrings[0])) isUsingPromo = true;
             }
             ret += "-----------------------------------\n";
 
@@ -49,23 +42,35 @@
                 ret += "Promotion used:\n";
 
                 double saving = 0.0;
-                string savedItems = "";
+                string savingString = "";
+                SalesPromotion selectedCoupon = promoList[0];
+                foreach(var coupon in promoList)
+                {
+                    var discount = 0.0;
+                    var discountList = coupon.RelatedItems.Where(x => inputDict.ContainsKey(x));
+                    if (!discountList.Any()) 
+                        continue;
+                    var currentSaving = discountList.Select(x => itemDict[x].Price * inputDict[x] * 0.5).Sum();
+                    if (currentSaving > saving)
+                    {
+                        saving = currentSaving;
+                        selectedCoupon = coupon;
+                    }
+                }
+                savingList = selectedCoupon.RelatedItems.Where(x =>inputDict.ContainsKey(x)).ToList();
                 foreach (var id in savingList)
                 {
-                    saving += itemDict[id].Price * inputDict[id] * 0.5;
                     if(savingList.IndexOf(id) == 0)
                     {
-                        savedItems += itemDict[id].Name;
+                        savingString += itemDict[id].Name;
                     }
                     else
                     {
-                        savedItems += ", " + itemDict[id].Name;
+                        savingString += ", " + itemDict[id].Name;
                     }
                 }
-
                 total -= saving;
-                ret += $"{promoList[0].DisplayName} ({savedItems}), saving {(int)saving} yuan\n";
-
+                ret += $"{promoList[0].DisplayName} ({savingString}), saving {(int)saving} yuan\n";
                 ret += "-----------------------------------\n";
             }
 
